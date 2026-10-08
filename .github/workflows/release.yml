@@ -1,0 +1,40 @@
+name: Release
+
+# Push a tag like v1.1-beta or v1.2 to publish a release.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build CivilVBA.zip
+        run: |
+          mkdir -p dist/CivilVBA
+          cp src/CivilVBA.bas src/JsonConverter.bas README.md dist/CivilVBA/
+          (cd dist && zip -r CivilVBA.zip CivilVBA)
+          cp src/CivilVBA.bas dist/
+
+      # Always a full release (not a pre-release), so that
+      # releases/latest/download/... points at it.
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          TITLE=$(echo "$TAG" | sed -E 's/-beta$/ Beta/')
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            # tag moved: refresh the files and notes of the existing release
+            gh release upload "$TAG" dist/CivilVBA.zip dist/CivilVBA.bas --clobber
+            gh release edit "$TAG" --title "$TITLE" --notes-file RELEASE_NOTES.md
+          else
+            gh release create "$TAG" dist/CivilVBA.zip dist/CivilVBA.bas \
+              --title "$TITLE" --notes-file RELEASE_NOTES.md
+          fi
